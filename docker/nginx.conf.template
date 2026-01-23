@@ -1,0 +1,18 @@
+events {}
+
+http {
+    server {
+        listen 4001;
+
+        # Public health endpoint (no auth)
+        location /health {
+            proxy_pass http://127.0.0.1:4000/health;
+            proxy_set_header Authorization "Basic ${LITELLM_MASTER_KEY}"; # base64(user:pass)
+        }
+
+        # Optional: deny everything else
+        location / {
+            return 404;
+        }
+    }
+}
