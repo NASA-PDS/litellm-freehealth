@@ -74,7 +74,7 @@ jobs:
                 name: 🧱 Image Construction and Publication
                 uses: docker/build-push-action@v6
                 with:
-                    context: ./
+                    context: ./docker
                     file: ./docker/Dockerfile
                     platforms: linux/amd64,linux/arm64
                     push: true

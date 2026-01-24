@@ -2,9 +2,8 @@ FROM docker.litellm.ai/berriai/litellm-database:main-latest
 
 ENTRYPOINT ["/bin/bash", "-c"]
 
-ARG LITELLM_MASTER_KEY=sk-default
-
-ENV LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+# Env varialble for litellm
+ENV LITELLM_MASTER_KEY="sk-default"
 
 # Install nginx
 RUN apk update \
