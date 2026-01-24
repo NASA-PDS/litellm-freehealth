@@ -4,6 +4,13 @@ model_list:
       model: bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0
       region_name: us-west-2
 
+litellm_settings:
+  callbacks:
+    - hook.pre_call_hook
+
 general_settings:
     public_routes:
-      - "/health*" # All health check routes 
+      - "/health*" # All health check routes
+
+
+ß
