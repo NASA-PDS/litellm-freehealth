@@ -25,6 +25,9 @@ def sanitize_messages(messages):
 
 
 def pre_call_hook(model, messages, **kwargs):
+    headers = kwargs.get("headers")
+    if headers and "anthropic-beta" in headers:
+        headers.pop("anthropic-beta")
     return {
         "model": model,
         "messages": sanitize_messages(messages),
