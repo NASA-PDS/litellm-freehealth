@@ -10,7 +10,7 @@ litellm_settings:
 
 general_settings:
     public_routes:
-      - "/health*" # All health check routes
+      - "/health*" # All health check routes, only works with enterprise edition
 
 
-ß
+

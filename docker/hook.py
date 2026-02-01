@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 def sanitize_messages(messages):
     cleaned = []
 
@@ -26,6 +30,7 @@ def sanitize_messages(messages):
 
 def pre_call_hook(model, messages, **kwargs):
     headers = kwargs.get("headers")
+    logger.info("Pre-call hook called")
     if headers and "anthropic-beta" in headers:
         headers.pop("anthropic-beta")
     return {
