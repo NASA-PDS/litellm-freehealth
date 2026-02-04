@@ -75,10 +75,11 @@ jobs:
                 uses: docker/build-push-action@v6
                 with:
                     context: ./docker
+                    build-args: IMAGE_TAG=${{ github.sha }}
                     file: ./docker/Dockerfile
                     platforms: linux/amd64,linux/arm64
                     push: true
-                    tags: ${{secrets.DOCKERHUB_USERNAME}}/litellm-freehealth:latest
+                    tags: ${{secrets.DOCKERHUB_USERNAME}}/litellm-freehealth:${{github.sha}},${{secrets.DOCKERHUB_USERNAME}}/litellm-freehealth:latest
 
 ...
 

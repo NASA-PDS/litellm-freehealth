@@ -1,6 +1,7 @@
 FROM docker.litellm.ai/berriai/litellm-database:main-latest
 
-ENTRYPOINT ["/bin/bash", "-c"]
+ARG IMAGE_TAG=latest
+ENV IMAGE_TAG=$IMAGE_TAG
 
 # Env varialble for litellm
 ENV LITELLM_MASTER_KEY="sk-default"
@@ -16,6 +17,8 @@ COPY nginx.conf.template /etc/nginx/nginx.conf.template
 COPY create_nginx_conf.sh /app/create_nginx_conf.sh
 COPY ./hook.py /etc/litellm/hook.py
 COPY config.yaml /etc/litellm/config.yaml
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 RUN chmod +x /app/create_nginx_conf.sh
 
@@ -29,9 +32,7 @@ WORKDIR /app
 ENV PYTHONPATH="/etc/litellm:$PYTHONPATH"
 
 # Start both the original service and nginx
-CMD ["\
-  ./create_nginx_conf.sh && \
-  docker/prod_entrypoint.sh --port 4000 --config /etc/litellm/config.yaml & \
-  nginx -g 'daemon off;' \
-"]
+#
+LABEL org.opencontainers.image.revision=$IMAGE_TAG
 
+ENTRYPOINT ["./entrypoint.sh"]
