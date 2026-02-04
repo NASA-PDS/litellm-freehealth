@@ -4,7 +4,7 @@ ENTRYPOINT ["/bin/bash", "-c"]
 
 # Env varialble for litellm
 ENV LITELLM_MASTER_KEY="sk-default"
-ENV PYTHONPATH="/etc/litellm:$PYTHONPATH"
+ENV PYTHONPATH="/app:$PYTHONPATH"
 
 # Install nginx
 RUN apk update \
@@ -15,7 +15,7 @@ RUN adduser -D -g 'nginx' nginx
 # Copy nginx config template
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
 COPY create_nginx_conf.sh /app/create_nginx_conf.sh
-COPY ./hook.py /etc/litellm/hook.py
+COPY ./hook.py /app/hook.py
 COPY config.yaml /etc/litellm/config.yaml
 
 RUN chmod +x /app/create_nginx_conf.sh
