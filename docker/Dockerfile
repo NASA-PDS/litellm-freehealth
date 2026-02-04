@@ -4,6 +4,7 @@ ENTRYPOINT ["/bin/bash", "-c"]
 
 # Env varialble for litellm
 ENV LITELLM_MASTER_KEY="sk-default"
+ENV PYTHONPATH="/etc/litellm:$PYTHONPATH"
 
 # Install nginx
 RUN apk update \
