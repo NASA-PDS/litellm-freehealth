@@ -1,5 +1,5 @@
-# take a stable image from https://github.com/berriai/litellm/pkgs/container/litellm
-FROM ghcr.io/berriai/litellm:v1.81.0-stable
+# take a stable image from https://github.com/BerriAI/litellm/pkgs/container/litellm-database/versions
+FROM ghcr.io/berriai/litellm-database:main-v1.81.0-stable
 
 ARG IMAGE_TAG=latest
 ENV IMAGE_TAG=$IMAGE_TAG
@@ -15,13 +15,16 @@ RUN adduser -D -g 'nginx' nginx
 
 # Copy nginx config template
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
+
 COPY create_nginx_conf.sh /app/create_nginx_conf.sh
-COPY ./hook.py /etc/litellm/hook.py
+RUN chmod +x /app/create_nginx_conf.sh
+
+#COPY ./hook.py /etc/litellm/hook.py
 COPY config.yaml /etc/litellm/config.yaml
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-RUN chmod +x /app/create_nginx_conf.sh
+
 
 
 # Expose proxy port
