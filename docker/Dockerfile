@@ -1,4 +1,4 @@
-FROM docker.litellm.ai/berriai/litellm-database:main-latest
+FROM litellm/litellm-database:v1.81.0-patch2
 
 ARG IMAGE_TAG=latest
 ENV IMAGE_TAG=$IMAGE_TAG
