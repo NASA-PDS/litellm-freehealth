@@ -38,3 +38,6 @@ def pre_call_hook(model, messages, **kwargs):
         "messages": sanitize_messages(messages),
         **kwargs,
     }
+
+def test():
+    print("test ok")

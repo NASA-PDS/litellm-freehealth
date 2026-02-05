@@ -9,6 +9,8 @@ SCRIPT_DIR="$(dirname "$0")"
 echo "Using litellm callback:"
 cat /etc/litellm/hook.py
 
+python -c "import sys; import hook; hook.test()"
+
 # Start litellm from /app directory as a background process
 "$SCRIPT_DIR"/docker/prod_entrypoint.sh --port 4000 --config /etc/litellm/config.yaml &
 
