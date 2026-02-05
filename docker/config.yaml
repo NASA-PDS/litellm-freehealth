@@ -19,9 +19,11 @@ model_list:
       model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
       region_name: us-west-2
 
-litellm_settings:
-  callbacks:
-    - hook.pre_call_hook
+# I was not able to make that work
+# that would be useful at some point but let's try without for now
+#litellm_settings:
+#  callbacks:
+#   - hook.proxy_handler_instance
 
 general_settings:
     public_routes:
