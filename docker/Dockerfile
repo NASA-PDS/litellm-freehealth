@@ -20,7 +20,7 @@ COPY create_nginx_conf.sh /app/create_nginx_conf.sh
 RUN chmod +x /app/create_nginx_conf.sh
 
 #COPY ./hook.py /etc/litellm/hook.py
-COPY config.yaml /etc/litellm/config.yaml
+#COPY config.yaml /etc/litellm/config.yaml
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
