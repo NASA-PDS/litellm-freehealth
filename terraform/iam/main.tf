@@ -85,7 +85,8 @@ resource "aws_iam_role_policy" "litellm_ecs_task" {
         ]
         Resource = [
           "arn:aws:bedrock:us-west-2:${data.aws_caller_identity.current.account_id}:inference-profile/*",
-          "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+          "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
+          "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5"
         ]
       }
     ]
