@@ -14,3 +14,9 @@ variable "s3_bucket_arn" {
   description = "ARN of the LiteLLM config S3 bucket (output from infra module)"
   type        = string
 }
+
+variable "permission_boundary_arn" {
+  description = "ARN of the IAM policy to use as a permissions boundary for created roles"
+  type        = string
+  default     = null
+}

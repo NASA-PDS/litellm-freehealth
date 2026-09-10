@@ -1,7 +1,8 @@
 data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "litellm_ecs_task_execution" {
-  name = "litellm-ecs-task-execution"
+  name                 = "am-litellm-ecs-task-execution"
+  permissions_boundary = var.permission_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -37,7 +38,8 @@ resource "aws_iam_role_policy" "litellm_secrets" {
 }
 
 resource "aws_iam_role" "litellm_ecs_task" {
-  name = "litellm-ecs-task-role"
+  name                 = "am-litellm-ecs-task-role"
+  permissions_boundary = var.permission_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
