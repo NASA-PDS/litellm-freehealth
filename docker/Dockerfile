@@ -9,7 +9,8 @@ ENV LITELLM_MASTER_KEY="sk-default"
 
 # Install nginx
 RUN apk update \
- && apk add --no-cache nginx
+ && apk add --no-cache nginx jq \
+ && pip install --no-cache-dir awscli
 
 RUN adduser -D -g 'nginx' nginx
 
