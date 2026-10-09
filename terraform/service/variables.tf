@@ -1,85 +1,149 @@
 variable "aws_region" {
-  description = "AWS region to deploy resources"
+  description = "AWS region to deploy into."
   type        = string
   default     = "us-west-2"
 }
 
-variable "aws_profile" {
-  description = "AWS CLI profile to use for authentication"
+variable "tenant" {
+  description = "Owner discipline node (tag value)."
   type        = string
-  default     = null
+
+  validation {
+    condition     = contains(["en", "img", "atm", "sbn"], var.tenant)
+    error_message = "tenant must be one of: en, img, atm, sbn."
+  }
 }
 
 variable "venue" {
-  description = "Deployment venue (e.g. podaac-dev)"
+  description = "Full venue identifier, used as the resource name prefix and the venue tag (pds-cds-dev, pds-cds-test or pds-cds-prod)."
   type        = string
+
+  validation {
+    condition     = contains(["pds-cds-dev", "pds-cds-test", "pds-cds-prod"], var.venue)
+    error_message = "venue must be one of: pds-cds-dev, pds-cds-test, pds-cds-prod."
+  }
+}
+
+variable "component" {
+  description = "Component name (tag value and SSM/Secrets Manager path segment). Matches the GitHub repository name."
+  type        = string
+}
+
+variable "application" {
+  description = "Application name used to build resource names, as <venue>-<application>."
+  type        = string
+  default     = "ai-gateway"
+}
+
+variable "managedby" {
+  description = "Email address of the person (or team distribution list when cicd is cd) managing the resources."
+  type        = string
+}
+
+variable "cicd" {
+  description = "Deployment method tag."
+  type        = string
+  default     = "iac"
+
+  validation {
+    condition     = contains(["con", "cli", "iac", "manual", "cd"], var.cicd)
+    error_message = "cicd must be one of: con, cli, iac, manual, cd."
+  }
 }
 
 variable "vpc_id" {
-  description = "VPC ID where resources will be deployed"
+  description = "ID of the VPC hosting the load balancer and ECS tasks."
   type        = string
+
+  validation {
+    condition     = can(regex("^vpc-[0-9a-f]+$", var.vpc_id))
+    error_message = "vpc_id must be a valid VPC ID beginning with vpc-."
+  }
 }
 
-variable "subnet_ids" {
-  description = "List of private subnet IDs for the ECS service"
+variable "private_subnet_ids" {
+  description = "Private subnet IDs for the ECS tasks (no public IP is assigned)."
   type        = list(string)
+
+  validation {
+    condition     = length(var.private_subnet_ids) >= 1 && alltrue([for id in var.private_subnet_ids : can(regex("^subnet-[0-9a-f]+$", id))])
+    error_message = "private_subnet_ids must contain at least one subnet ID beginning with subnet-."
+  }
 }
 
 variable "alb_subnet_ids" {
-  description = "Subnet IDs for the ALB; defaults to subnet_ids if not set"
+  description = "Subnet IDs (in at least two AZs) for the load balancer: public subnets when alb_internal is false, otherwise private."
   type        = list(string)
-  default     = null
+
+  validation {
+    condition     = length(var.alb_subnet_ids) >= 2 && alltrue([for id in var.alb_subnet_ids : can(regex("^subnet-[0-9a-f]+$", id))])
+    error_message = "alb_subnet_ids must contain at least two subnet IDs beginning with subnet-."
+  }
 }
 
 variable "alb_internal" {
-  description = "Whether the ALB is internal (true) or internet-facing (false)"
+  description = "Whether the load balancer is internal (true) or internet-facing (false)."
   type        = bool
-  default     = true
 }
 
-variable "jplnet_cidr_blocks" {
-  description = "CIDR blocks for JPL network inbound access to the ALB on port 80"
+variable "alb_ingress_cidr_blocks" {
+  description = "CIDR blocks allowed to reach the load balancer on port 80 (for example the JPLnet ranges)."
   type        = list(string)
-  default     = ["128.149.0.0/16"]
+
+  validation {
+    condition     = length(var.alb_ingress_cidr_blocks) > 0 && alltrue([for c in var.alb_ingress_cidr_blocks : can(cidrhost(c, 0))])
+    error_message = "alb_ingress_cidr_blocks must be a non-empty list of valid CIDR blocks."
+  }
+}
+
+variable "alb_idle_timeout_seconds" {
+  description = "Load balancer idle timeout; long enough for slow streamed model responses."
+  type        = number
+  default     = 300
+}
+
+variable "container_image" {
+  description = "Container image for the LiteLLM service, including tag (built from the docker/ directory of this repository)."
+  type        = string
+}
+
+variable "cpu_architecture" {
+  description = "CPU architecture of the container image (X86_64 or ARM64)."
+  type        = string
+  default     = "X86_64"
+
+  validation {
+    condition     = contains(["X86_64", "ARM64"], var.cpu_architecture)
+    error_message = "cpu_architecture must be X86_64 or ARM64."
+  }
 }
 
 variable "task_cpu" {
-  description = "CPU units for the ECS Fargate task (1024 = 1 vCPU)"
+  description = "CPU units for the ECS Fargate task (1024 = 1 vCPU)."
   type        = number
   default     = 1024
 }
 
 variable "task_memory" {
-  description = "Memory in MiB for the ECS Fargate task"
+  description = "Memory in MiB for the ECS Fargate task."
   type        = number
-  default     = 2048
+  default     = 3072
 }
 
 variable "desired_count" {
-  description = "Desired number of running ECS task instances"
+  description = "Desired number of running tasks."
   type        = number
   default     = 1
 }
 
-variable "project" {
-  description = "Project identifier used as a prefix in Secrets Manager paths and other shared resources"
-  type        = string
-  default     = "pds"
+variable "health_check_grace_period_seconds" {
+  description = "Seconds ECS ignores load balancer health checks after a task starts, to cover database migrations on first boot."
+  type        = number
+  default     = 180
 }
 
-variable "db_secret_arn" {
-  description = "ARN of the RDS-managed secret (rds_master_user_secret_arn output from the infra module), passed to the container as DB_SECRET_ARN"
-  type        = string
-}
-
-variable "task_execution_role_name" {
-  description = "Name of the ECS task execution IAM role (created in iam module)"
-  type        = string
-  default     = "am-litellm-ecs-task-execution"
-}
-
-variable "task_role_name" {
-  description = "Name of the ECS task IAM role (created in iam module)"
-  type        = string
-  default     = "am-litellm-ecs-task-role"
+variable "log_retention_days" {
+  description = "Retention, in days, of the container log group."
+  type        = number
+  default     = 30
 }

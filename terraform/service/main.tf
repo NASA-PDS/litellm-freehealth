@@ -1,79 +1,119 @@
-data "aws_caller_identity" "current" {}
+locals {
+  name_prefix  = "${var.venue}-${var.application}"
+  ssm_prefix   = "/pds/${var.component}"
+  litellm_port = 4000
 
-data "aws_iam_role" "task_execution" {
-  name = var.task_execution_role_name
+  # Values published by the infra and iam modules.
+  upstream_names = toset([
+    "s3/config_bucket_name",
+    "rds/db_endpoint",
+    "rds/db_name",
+    "rds/db_secret_arn",
+    "rds/db_security_group_id",
+    "ecs/master_key_secret_arn",
+    "iam/ecs_task_role_arn",
+    "iam/ecs_task_execution_role_arn",
+  ])
+  upstream = { for k, p in data.aws_ssm_parameter.upstream : k => p.insecure_value }
 }
 
-data "aws_iam_role" "task" {
-  name = var.task_role_name
+data "aws_ssm_parameter" "upstream" {
+  for_each = local.upstream_names
+
+  name = "${local.ssm_prefix}/${each.key}"
 }
 
-data "aws_secretsmanager_secret" "master_key" {
-  name = "${var.project}/llm-for-dev/litellm/master-key"
-}
-
-# Security group for the ALB — allows JPLnet inbound on HTTP:80
-# TODO: switch to HTTPS:443 once CloudFront distribution with DNS is in place
-# TODO: restrict inbound to CloudFront managed prefix list when CloudFront is activated
-resource "aws_security_group" "litellm_alb" {
-  name        = "${var.venue}-litellm-alb"
-  description = "Allow HTTP from JPLnet to LiteLLM ALB"
+# Load balancer: reachable only from the allowed CIDR blocks, forwards to the tasks on the LiteLLM port.
+# TODO: switch to HTTPS:443 and restrict to the CloudFront managed prefix list once CloudFront/DNS is in place.
+resource "aws_security_group" "alb" {
+  name        = "${local.name_prefix}-alb"
+  description = "HTTP access to the ${local.name_prefix} load balancer"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.jplnet_cidr_blocks
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  lifecycle {
+    ignore_changes = [tags]
   }
 }
 
-# Security group for ECS tasks — only reachable from the ALB
-resource "aws_security_group" "litellm" {
-  name        = "${var.venue}-litellm"
-  description = "Allow ALB to access LiteLLM ECS tasks on ports 4000-4001"
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  for_each = toset(var.alb_ingress_cidr_blocks)
+
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTP from ${each.key}"
+  cidr_ipv4         = each.key
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+}
+
+resource "aws_vpc_security_group_egress_rule" "alb_to_tasks" {
+  security_group_id            = aws_security_group.alb.id
+  description                  = "To the ECS tasks"
+  referenced_security_group_id = aws_security_group.ecs_task.id
+  ip_protocol                  = "tcp"
+  from_port                    = local.litellm_port
+  to_port                      = local.litellm_port
+}
+
+resource "aws_security_group" "ecs_task" {
+  name        = "${local.name_prefix}-ecs-task"
+  description = "${local.name_prefix} ECS tasks"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port       = 4000
-    to_port         = 4001
-    protocol        = "tcp"
-    security_groups = [aws_security_group.litellm_alb.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  lifecycle {
+    ignore_changes = [tags]
   }
 }
 
-resource "aws_lb" "litellm" {
-  name               = "${var.venue}-litellm"
-  internal           = var.alb_internal
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.litellm_alb.id]
-  subnets            = coalesce(var.alb_subnet_ids, var.subnet_ids)
+resource "aws_vpc_security_group_ingress_rule" "ecs_task_from_alb" {
+  security_group_id            = aws_security_group.ecs_task.id
+  description                  = "LiteLLM port from the load balancer"
+  referenced_security_group_id = aws_security_group.alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = local.litellm_port
+  to_port                      = local.litellm_port
 }
 
-resource "aws_lb_target_group" "litellm" {
-  name        = "${var.venue}-litellm"
-  port        = 4000
+# Tasks need outbound access to Bedrock, Secrets Manager, S3, the image registry and the database.
+resource "aws_vpc_security_group_egress_rule" "ecs_task_all" {
+  security_group_id = aws_security_group.ecs_task.id
+  description       = "All outbound traffic"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}
+
+# Added to the database security group owned by the infra module.
+resource "aws_vpc_security_group_ingress_rule" "db_from_ecs_task" {
+  security_group_id            = local.upstream["rds/db_security_group_id"]
+  description                  = "PostgreSQL from the ${local.name_prefix} ECS tasks"
+  referenced_security_group_id = aws_security_group.ecs_task.id
+  ip_protocol                  = "tcp"
+  from_port                    = 5432
+  to_port                      = 5432
+}
+
+resource "aws_lb" "this" {
+  name                       = local.name_prefix
+  internal                   = var.alb_internal
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb.id]
+  subnets                    = var.alb_subnet_ids
+  idle_timeout               = var.alb_idle_timeout_seconds
+  drop_invalid_header_fields = true
+}
+
+resource "aws_lb_target_group" "this" {
+  name        = local.name_prefix
+  port        = local.litellm_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
 
+  # /health/readiness is unauthenticated and cheap. Do not point the health check at /health:
+  # it calls every configured model and incurs Bedrock costs.
   health_check {
     path                = "/health/readiness"
-    port                = "4000"
+    port                = "traffic-port"
     protocol            = "HTTP"
     healthy_threshold   = 2
     unhealthy_threshold = 3
@@ -83,63 +123,68 @@ resource "aws_lb_target_group" "litellm" {
   }
 }
 
-# TODO: switch port to 443 and add certificate_arn when CloudFront/DNS is ready
-resource "aws_lb_listener" "litellm" {
-  load_balancer_arn = aws_lb.litellm.arn
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.litellm.arn
+    target_group_arn = aws_lb_target_group.this.arn
   }
 }
 
-resource "aws_cloudwatch_log_group" "litellm" {
-  name              = "/ecs/${var.venue}-litellm"
-  retention_in_days = 30
+resource "aws_cloudwatch_log_group" "this" {
+  name              = "/ecs/${local.name_prefix}"
+  retention_in_days = var.log_retention_days
 }
 
-resource "aws_ecs_cluster" "litellm" {
-  name = "${var.venue}-litellm"
+resource "aws_ecs_cluster" "this" {
+  name = local.name_prefix
 }
 
-resource "aws_ecs_task_definition" "litellm" {
-  family                   = "${var.venue}-llm-for-developers-litellm-task"
+resource "aws_ecs_task_definition" "this" {
+  family                   = local.name_prefix
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.task_cpu
   memory                   = var.task_memory
-  execution_role_arn       = data.aws_iam_role.task_execution.arn
-  task_role_arn            = data.aws_iam_role.task.arn
+  execution_role_arn       = local.upstream["iam/ecs_task_execution_role_arn"]
+  task_role_arn            = local.upstream["iam/ecs_task_role_arn"]
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = var.cpu_architecture
+  }
 
   container_definitions = jsonencode([
     {
       name      = "litellm"
-      image     = "nasapds/litellm-freehealth:terraform-b1360c9bad47eb6fe40729235a66717f6ecb0ea6"
+      image     = var.container_image
       essential = true
 
       portMappings = [
-        { containerPort = 4000, protocol = "tcp" },
-        # port 4001 exposes the free /health endpoint used by the ALB target group
-        { containerPort = 4001, protocol = "tcp" }
+        { containerPort = local.litellm_port, protocol = "tcp" }
       ]
 
       environment = [
-        { name = "DB_SECRET_ARN", value = var.db_secret_arn }
+        { name = "DB_SECRET_ARN", value = local.upstream["rds/db_secret_arn"] },
+        { name = "DB_HOST", value = local.upstream["rds/db_endpoint"] },
+        { name = "DB_PORT", value = "5432" },
+        { name = "DB_NAME", value = local.upstream["rds/db_name"] },
+        { name = "LITELLM_CONFIG_BUCKET_NAME", value = local.upstream["s3/config_bucket_name"] },
+        { name = "LITELLM_CONFIG_BUCKET_OBJECT_KEY", value = "config.yaml" },
+        { name = "FORWARDED_ALLOW_IPS", value = "*" }
       ]
 
       secrets = [
-        {
-          name      = "LITELLM_MASTER_KEY"
-          valueFrom = data.aws_secretsmanager_secret.master_key.arn
-        }
+        { name = "LITELLM_MASTER_KEY", valueFrom = local.upstream["ecs/master_key_secret_arn"] }
       ]
 
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.litellm.name
+          "awslogs-group"         = aws_cloudwatch_log_group.this.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "litellm"
         }
@@ -148,24 +193,30 @@ resource "aws_ecs_task_definition" "litellm" {
   ])
 }
 
-resource "aws_ecs_service" "litellm" {
-  name            = "${var.venue}-litellm"
-  cluster         = aws_ecs_cluster.litellm.id
-  task_definition = aws_ecs_task_definition.litellm.arn
-  desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+resource "aws_ecs_service" "this" {
+  name                              = local.name_prefix
+  cluster                           = aws_ecs_cluster.this.id
+  task_definition                   = aws_ecs_task_definition.this.arn
+  desired_count                     = var.desired_count
+  launch_type                       = "FARGATE"
+  health_check_grace_period_seconds = var.health_check_grace_period_seconds
 
   network_configuration {
-    subnets          = var.subnet_ids
-    security_groups  = [aws_security_group.litellm.id]
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.ecs_task.id]
     assign_public_ip = false
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.litellm.arn
+    target_group_arn = aws_lb_target_group.this.arn
     container_name   = "litellm"
-    container_port   = 4000
+    container_port   = local.litellm_port
   }
 
-  depends_on = [aws_lb_listener.litellm]
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  depends_on = [aws_lb_listener.http, aws_vpc_security_group_ingress_rule.db_from_ecs_task]
 }

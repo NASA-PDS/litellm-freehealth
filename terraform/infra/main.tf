@@ -1,84 +1,77 @@
-resource "aws_s3_bucket" "litellm_config" {
-  bucket = "${var.venue}-litellm-for-teams"
+locals {
+  name_prefix = "${var.venue}-${var.application}"
+  ssm_prefix  = "/pds/${var.component}"
 }
 
-resource "aws_s3_bucket_versioning" "litellm_config" {
-  bucket = aws_s3_bucket.litellm_config.id
+# Bucket holding the LiteLLM config.yaml read by the container at startup.
+# Server access logging is intentionally disabled (no log bucket is provisioned for this component).
+module "config_bucket" {
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/s3/bucket?ref=v0.1.0"
 
-  versioning_configuration {
-    status = "Enabled"
-  }
+  bucket_name = "${local.name_prefix}-config"
+  versioning  = "Enabled"
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "litellm_config" {
-  bucket = aws_s3_bucket.litellm_config.id
+module "config_object" {
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/s3/object?ref=v0.1.0"
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
+  bucket      = module.config_bucket.bucket_id
+  key         = "config.yaml"
+  source_path = "${path.module}/config.yaml"
 }
 
-resource "aws_s3_bucket_public_access_block" "litellm_config" {
-  bucket = aws_s3_bucket.litellm_config.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+# Container only: the value is set out-of-band so it never lands in Terraform state.
+# See README.md ("Set the master key") for the command.
+resource "aws_secretsmanager_secret" "master_key" {
+  name                    = "${local.ssm_prefix}/ecs/master_key"
+  description             = "LiteLLM master key (admin password and root API key) for ${local.name_prefix}."
+  recovery_window_in_days = var.secret_recovery_window_days
 }
 
-resource "aws_s3_object" "litellm_config" {
-  bucket = aws_s3_bucket.litellm_config.id
-  key    = "config.yaml"
-  source = "${path.module}/config.yaml"
-  etag   = filemd5("${path.module}/config.yaml")
-}
-
-resource "aws_security_group" "litellm_rds" {
-  name        = "${var.venue}-litellm-rds"
-  description = "Allow PostgreSQL access to LiteLLM Aurora cluster"
+# Ingress from the ECS tasks is added by the service module, which owns the tasks' security group.
+resource "aws_security_group" "rds" {
+  name        = "${local.name_prefix}-rds"
+  description = "Aurora PostgreSQL for ${local.name_prefix}"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  lifecycle {
+    ignore_changes = [tags]
   }
 }
 
-resource "aws_db_subnet_group" "litellm" {
-  name       = "${var.venue}-litellm"
-  subnet_ids = var.subnet_ids
+resource "aws_db_subnet_group" "this" {
+  name       = local.name_prefix
+  subnet_ids = var.private_subnet_ids
 }
 
-resource "aws_rds_cluster" "litellm" {
-  cluster_identifier              = "${var.venue}-litellm"
-  engine                          = "aurora-postgresql"
-  engine_version                  = "17"
-  database_name                   = "litellm"
-  master_username                 = "litellm"
-  manage_master_user_password     = true
-  db_subnet_group_name            = aws_db_subnet_group.litellm.name
-  vpc_security_group_ids          = [aws_security_group.litellm_rds.id]
-  db_cluster_parameter_group_name = "default.aurora-postgresql17"
-  skip_final_snapshot             = true
+resource "aws_rds_cluster" "this" {
+  cluster_identifier          = local.name_prefix
+  engine                      = "aurora-postgresql"
+  engine_version              = var.db_engine_version
+  database_name               = var.db_name
+  master_username             = var.db_master_username
+  manage_master_user_password = true
+  storage_encrypted           = true
+  backup_retention_period     = var.db_backup_retention_days
+  deletion_protection         = var.db_deletion_protection
+  db_subnet_group_name        = aws_db_subnet_group.this.name
+  vpc_security_group_ids      = [aws_security_group.rds.id]
+
+  # A unique, creation-time snapshot name keeps destroy/recreate cycles from colliding with older final snapshots.
+  skip_final_snapshot       = false
+  final_snapshot_identifier = "${local.name_prefix}-final-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+
+  lifecycle {
+    ignore_changes = [final_snapshot_identifier]
+  }
 }
 
-resource "aws_rds_cluster_instance" "litellm" {
-  identifier           = "${var.venue}-litellm"
-  cluster_identifier   = aws_rds_cluster.litellm.id
-  instance_class       = "db.t4g.medium"
-  engine               = aws_rds_cluster.litellm.engine
-  engine_version       = aws_rds_cluster.litellm.engine_version
-  db_subnet_group_name = aws_db_subnet_group.litellm.name
+resource "aws_rds_cluster_instance" "writer" {
+  identifier           = "${local.name_prefix}-writer"
+  cluster_identifier   = aws_rds_cluster.this.id
+  instance_class       = var.db_instance_class
+  engine               = aws_rds_cluster.this.engine
+  engine_version       = aws_rds_cluster.this.engine_version
+  db_subnet_group_name = aws_db_subnet_group.this.name
+  publicly_accessible  = false
 }
