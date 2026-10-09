@@ -67,13 +67,6 @@ jobs:
                     username: ${{secrets.DOCKERHUB_USERNAME}}
                     password: ${{secrets.DOCKERHUB_TOKEN}}
             -
-                name: 💳 GitHub Container Registry Identification
-                uses: docker/login-action@v3
-                with:
-                    registry: ghcr.io
-                    username: ${{github.actor}}
-                    password: ${{secrets.GITHUB_TOKEN}}
-            -
                 name: 🎰 QEMU Multiple Machine Emulation
                 uses: docker/setup-qemu-action@v3
             -
@@ -84,9 +77,9 @@ jobs:
                 id: image-tags
                 run: |
                     BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
-                    TAGS="${{secrets.DOCKERHUB_USERNAME}}/litellm-freehealth:${BRANCH}-${{ github.sha }}"
+                    TAGS="${{secrets.DOCKERHUB_USERNAME}}/ai-gateway:${BRANCH}-${{ github.sha }}"
                     if [ "${{ github.ref_name }}" = "main" ]; then
-                        TAGS="${TAGS},${{secrets.DOCKERHUB_USERNAME}}/litellm-freehealth:latest"
+                        TAGS="${TAGS},${{secrets.DOCKERHUB_USERNAME}}/ai-gateway:latest"
                     fi
                     echo "tags=${TAGS}" >> $GITHUB_OUTPUT
             -

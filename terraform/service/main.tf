@@ -174,6 +174,9 @@ resource "aws_ecs_task_definition" "this" {
         { name = "DB_NAME", value = local.upstream["rds/db_name"] },
         { name = "LITELLM_CONFIG_BUCKET_NAME", value = local.upstream["s3/config_bucket_name"] },
         { name = "LITELLM_CONFIG_BUCKET_OBJECT_KEY", value = "config.yaml" },
+        # boto3 uses this for Bedrock calls; removes the need to hardcode region in config.yaml.
+        { name = "AWS_DEFAULT_REGION", value = var.aws_region },
+        # Safe: ecs_task SG only allows ingress from the ALB SG, so the ALB is always the XFF source.
         { name = "FORWARDED_ALLOW_IPS", value = "*" }
       ]
 

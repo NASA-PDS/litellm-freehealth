@@ -2,7 +2,7 @@
 
 Deploys the LiteLLM proxy ("ai-gateway") that fronts Amazon Bedrock models for developer tools such as Claude Code.
 
-Resources are named `<venue>-<application>[-<purpose>]`, for example `pds-cds-dev-ai-gateway`. Shared values are published to SSM under `/pds/<component>/<service>/<parameter_name>`, and the LiteLLM master key lives in Secrets Manager at `/pds/<component>/ecs/master_key`. `<component>` is the GitHub repository name (`litellm-freehealth`).
+Resources are named `<venue>-<application>[-<purpose>]`, for example `pds-cds-dev-ai-gateway`. Shared values are published to SSM under `/pds/<component>/<service>/<parameter_name>`, and the LiteLLM master key lives in Secrets Manager at `/pds/<component>/ecs/master_key`. `<component>` is the GitHub repository name (`ai-gateway`).
 
 | Root module | Owns | State key |
 |---|---|---|
@@ -30,7 +30,7 @@ Terraform creates the Secrets Manager secret but not its value, so the key never
 
 ```bash
 aws secretsmanager put-secret-value \
-  --secret-id /pds/litellm-freehealth/ecs/master_key \
+  --secret-id /pds/ai-gateway/ecs/master_key \
   --secret-string "sk-$(openssl rand -hex 24)"
 ```
 

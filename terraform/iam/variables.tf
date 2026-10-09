@@ -60,5 +60,14 @@ variable "permission_boundary_arn" {
 variable "bedrock_model_ids" {
   description = "Bedrock foundation model IDs (without ARN prefix) the task role may invoke, directly or through inference profiles."
   type        = list(string)
-  default     = ["anthropic.claude-sonnet-4-6", "anthropic.claude-sonnet-5"]
+  default = [
+    "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "anthropic.claude-opus-4-5-20251101-v1:0",
+    "anthropic.claude-haiku-4-5-20251001-v1:0",
+    "anthropic.claude-sonnet-4-6",
+    "anthropic.claude-sonnet-5",
+    "anthropic.claude-opus-5-5",
+    "anthropic.claude-fable-5-1",
+  ]
 }

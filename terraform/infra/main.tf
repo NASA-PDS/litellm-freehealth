@@ -10,6 +10,14 @@ module "config_bucket" {
 
   bucket_name = "${local.name_prefix}-config"
   versioning  = "Enabled"
+
+  required_tags = {
+    tenant    = var.tenant
+    venue     = var.venue
+    component = var.component
+    managedby = var.managedby
+    cicd      = var.cicd
+  }
 }
 
 module "config_object" {

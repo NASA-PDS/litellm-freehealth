@@ -11,6 +11,9 @@ locals {
 
   config_bucket_arn  = "arn:${local.partition}:s3:::${local.name_prefix}-config"
   master_key_arn     = "arn:${local.partition}:secretsmanager:${var.aws_region}:${local.account_id}:secret:${local.ssm_prefix}/ecs/master_key-*"
+  # RDS auto-generates the secret name (rds!cluster-<uuid>) so the exact ARN is unknown until the
+  # cluster exists. The wildcard is scoped to this account and region; tighten after first apply
+  # by replacing with the actual ARN from aws_rds_cluster.master_user_secret[0].secret_arn via SSM.
   rds_managed_secret = "arn:${local.partition}:secretsmanager:${var.aws_region}:${local.account_id}:secret:rds!cluster-*"
   log_group_arn      = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/ecs/${local.name_prefix}"
 

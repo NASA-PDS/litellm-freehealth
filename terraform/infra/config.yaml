@@ -1,8 +1,35 @@
 model_list:
+  - model_name: claude-sonnet-3.7
+    litellm_params:
+      model: bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0
+
+  - model_name: claude-sonnet-4.5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+  - model_name: claude-opus-4.5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-4-5-20251101-v1:0
+
+  - model_name: claude-haiku-4.5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+
   - model_name: claude-sonnet-4.6
     litellm_params:
       model: bedrock/us.anthropic.claude-sonnet-4-6
-      region_name: us-west-2
+
+  - model_name: claude-sonnet-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-5
+
+  - model_name: claude-opus-5-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-5-5
+
+  - model_name: claude-fable-5-1
+    litellm_params:
+      model: bedrock/us.anthropic.claude-fable-5-1
 
 # I was not able to make that work
 # that would be useful at some point but let's try without for now
@@ -10,7 +37,15 @@ model_list:
 #  callbacks:
 #   - hook.proxy_handler_instance
 
-general_settings:
-    public_routes:
-      - "/health*" # All health check routes, only works with enterprise edition
+litellm_settings:
+  request_timeout: 600
+  num_retries: 2
 
+router_settings:
+  timeout: 600
+  num_retries: 2
+
+general_settings:
+  public_routes:
+    - "/health*" # All health check routes, only works with enterprise edition
+  background_health_checks: False
